@@ -19,7 +19,7 @@ import streamlit as st
 # make project root importable when launched via `streamlit run`
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import config                              # noqa: E402
+import cloudspend_config as config         # noqa: E402
 from src import queries, bootstrap         # noqa: E402
 from src.analytics import anomaly, forecast  # noqa: E402
 

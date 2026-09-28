@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 
-import config
+import cloudspend_config as config
 from src import queries
 
 

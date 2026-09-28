@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 
-import config
+import cloudspend_config as config
 
 
 # Baseline daily cost per service (USD) -- realistic-ish relative scale

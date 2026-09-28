@@ -18,7 +18,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.engine import Engine
 
-import config
+import cloudspend_config as config
 
 metadata = MetaData()
 

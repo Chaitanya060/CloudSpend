@@ -5,7 +5,7 @@ Then: streamlit run dashboard/app.py
 """
 from __future__ import annotations
 
-import config
+import cloudspend_config as config
 from src import etl
 from src.analytics import anomaly, forecast
 
