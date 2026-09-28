@@ -1,6 +1,6 @@
 # CloudSpend — Cloud Billing ETL + Cost Insights
 
-A miniature cloud-cost (FinOps) platform: it **ingests raw cloud billing data,
+A miniature cloud-cost (FinOps) platform: it **ingests real cloud billing data,
 cleans and models it into a star schema, and surfaces cost insights** with
 anomaly detection and a 30-day spend forecast — served through a Streamlit
 dashboard.
@@ -8,17 +8,31 @@ dashboard.
 Built on the exact stack the pipeline targets: **Python · Pandas · NumPy ·
 scikit-learn · SQLAlchemy · MySQL/SQLite · (optional) AWS S3 + Lambda**.
 
+## Data source
+
+By default CloudSpend runs on **real, multi-cloud billing data**: the FinOps
+Foundation's official **FOCUS 1.0 sample dataset** (`datasets/focus_sample.csv`,
+10,000 rows spanning **AWS, Microsoft Azure, and Oracle** for September 2024).
+[FOCUS](https://focus.finops.org/) (FinOps Open Cost & Usage Specification) is
+the open billing standard that AWS, Azure, and GCP all now export to — so this
+pipeline ingests the *same schema a real FinOps team works with*, including real
+service names, regions, tags, and credits/refunds (negative costs).
+
+A self-contained **synthetic** generator is also included as a fallback / demo
+(`CLOUDSPEND_SOURCE=synthetic`) — useful for showing the ETL on deliberately
+messy data with planted anomalies.
+
 ---
 
 ## What it does
 
 | Layer | What happens |
 |-------|--------------|
-| **Generate** | Synthesizes an AWS Cost-and-Usage-Report-style CSV (`date, account_id, service, region, usage_type, cost, tags`) with *deliberately messy* data (nulls, mixed date formats, inconsistent service names) and **planted cost spikes**. |
-| **ETL** | Cleans (null repair, date parsing, service-name normalization), aggregates to daily grain, and loads a **star schema**: `fact_cost` + `dim_date`, `dim_account`, `dim_service`. |
-| **Anomaly detection** | Per service, a 7-day trailing rolling mean + std; flags any day above `mean + 2σ`. |
+| **Ingest** | Reads the real FOCUS 1.0 billing export (or a synthetic CUR-style CSV in fallback mode). |
+| **ETL** | Cleans (date parsing, null/credit handling, provider & category resolution), aggregates to daily grain, and loads a **star schema**: `fact_cost` + `dim_date`, `dim_account`, `dim_service` (service carries `provider` + `category`). |
+| **Anomaly detection** | Per service, a 7-day trailing rolling mean + std; flags any day above `mean + 2σ`, with a **materiality floor** so trivial (sub-cent) spend can't create false alarms. |
 | **Forecast** | 30-day spend projection via linear regression (`scikit-learn`). |
-| **Dashboard** | Streamlit UI: KPIs, top cost drivers, month-over-month, anomaly table + per-service chart, forecast chart. |
+| **Dashboard** | Streamlit UI: KPIs, top cost drivers, **spend by cloud provider**, by account, by category, daily trend, anomaly table + per-service chart, forecast chart. |
 
 ---
 
@@ -89,15 +103,18 @@ and wire an S3 `ObjectCreated` trigger to the function.
 
 ```
 CloudSpend/
-├── config.py                  # backend + generation/analytics knobs
-├── run_pipeline.py            # orchestrator: generate -> etl -> summary
+├── config.py                  # data source + backend + analytics knobs
+├── run_pipeline.py            # orchestrator: etl -> analytics summary
+├── datasets/
+│   └── focus_sample.csv       # REAL FOCUS 1.0 billing data (AWS/Azure/Oracle)
 ├── src/
-│   ├── generate_data.py       # synthetic CUR-style CSV with planted spikes
+│   ├── etl.py                 # extract / transform / load (FOCUS + synthetic)
 │   ├── db.py                  # SQLAlchemy engine + star schema
-│   ├── etl.py                 # extract / transform / load
 │   ├── queries.py             # read-side helpers (fact ⋈ dims)
+│   ├── bootstrap.py           # self-builds the DB on a fresh deploy
+│   ├── generate_data.py       # synthetic CUR-style generator (fallback)
 │   └── analytics/
-│       ├── anomaly.py         # 7-day rolling mean + 2σ
+│       ├── anomaly.py         # 7-day rolling mean + 2σ + materiality floor
 │       └── forecast.py        # 30-day linear projection
 ├── dashboard/app.py           # Streamlit dashboard
 └── aws_lambda/handler.py      # S3 -> Lambda -> RDS reference handler
@@ -106,8 +123,15 @@ CloudSpend/
 ## Run pieces individually
 
 ```bash
-python -m src.generate_data        # just (re)generate the raw CSV
-python -m src.etl                  # just run the ETL/load
+python -m src.etl                  # run the ETL/load
 python -m src.analytics.anomaly    # print detected anomalies
 python -m src.analytics.forecast   # print forecast summary
 ```
+
+Switch data source: `CLOUDSPEND_SOURCE=synthetic python run_pipeline.py`
+
+## Data credit
+
+Real sample data from the FinOps Foundation's
+[FOCUS-Sample-Data](https://github.com/FinOps-Open-Cost-and-Usage-Spec/FOCUS-Sample-Data)
+repository (FOCUS 1.0), redistributed here for demonstration.

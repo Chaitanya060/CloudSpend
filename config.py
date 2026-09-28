@@ -15,9 +15,22 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
+DATASETS_DIR = BASE_DIR / "datasets"            # versioned source data (real)
 
-RAW_CSV = DATA_DIR / "raw_billing.csv"          # synthetic AWS CUR-style export
 SQLITE_PATH = DATA_DIR / "cloudspend.db"
+
+# ---------------------------------------------------------------------------
+# Data source:  "focus" (real FinOps FOCUS 1.0 dataset)  or  "synthetic"
+# ---------------------------------------------------------------------------
+# "focus"     -> real cloud billing data from the FinOps Foundation's official
+#                FOCUS 1.0 sample (AWS / Microsoft / Oracle), committed under
+#                datasets/. This is the default.
+# "synthetic" -> the self-generated fake CUR-style CSV (kept as a fallback /
+#                for demonstrating the generator).
+DATA_SOURCE = os.getenv("CLOUDSPEND_SOURCE", "focus").lower()
+
+FOCUS_CSV = DATASETS_DIR / "focus_sample.csv"   # real dataset (source of truth)
+RAW_CSV = DATA_DIR / "raw_billing.csv"          # synthetic CUR-style export
 
 # ---------------------------------------------------------------------------
 # Database backend:  "sqlite"  (default, no setup)  or  "mysql"
@@ -55,6 +68,9 @@ REGIONS = ["us-east-1", "us-west-2", "eu-west-1", "ap-south-1"]
 # Anomaly detection
 ANOMALY_WINDOW = 7               # rolling window in days
 ANOMALY_SIGMA = 2.0              # flag if cost > mean + SIGMA * std
+ANOMALY_MIN_COST = 0.10          # materiality floor: ignore trivial spend so a
+                                 # near-zero baseline can't explode the % change
+                                 # (a standard FinOps practice to cut alert noise)
 
 # Forecast
 FORECAST_DAYS = 30               # projection horizon

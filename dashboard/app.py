@@ -48,13 +48,18 @@ def load_all():
         "daily_by_service": queries.daily_by_service(),
         "top_services": queries.top_services(),
         "top_accounts": queries.top_accounts(),
+        "by_provider": queries.by_provider(),
+        "by_category": queries.by_category(),
         "mom": queries.month_over_month(),
         "anomalies": anomaly.anomalies_only(),
     }
 
 
 st.title("💸 CloudSpend — Cloud Cost Insights")
-st.caption(f"Cloud billing ETL + anomaly detection + forecast · backend: `{config.DB_BACKEND}`")
+_src = ("real FinOps **FOCUS 1.0** dataset · AWS · Microsoft · Oracle"
+        if config.DATA_SOURCE == "focus" else "synthetic CUR-style data")
+st.caption(f"Cloud billing ETL + anomaly detection + forecast · "
+           f"data: {_src} · backend: `{config.DB_BACKEND}`")
 
 try:
     data = load_all()
@@ -74,16 +79,17 @@ n_anom = len(data["anomalies"])
 _, fc_summary = forecast.forecast()
 
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Total spend (all time)", f"${total_spend:,.0f}")
+c1.metric("Total billed cost", f"${total_spend:,.2f}")
 if len(mom) >= 2:
     delta = (mom["cost"].iloc[-1] - mom["cost"].iloc[-2]) / mom["cost"].iloc[-2] * 100
     c2.metric(f"Latest month ({mom['month'].iloc[-1]})",
-              f"${mom['cost'].iloc[-1]:,.0f}", f"{delta:+.1f}% MoM")
+              f"${mom['cost'].iloc[-1]:,.2f}", f"{delta:+.1f}% MoM")
 else:
-    c2.metric("Latest month", f"${mom['cost'].iloc[-1]:,.0f}")
+    c2.metric(f"Billing month ({mom['month'].iloc[-1]})",
+              f"${mom['cost'].iloc[-1]:,.2f}")
 c3.metric("Anomalies detected", n_anom)
-c4.metric("Forecast next 30d", f"${fc_summary['next_30d_total']:,.0f}",
-          f"{fc_summary['daily_trend_usd']:+.2f} USD/day")
+c4.metric("Forecast next 30d", f"${fc_summary['next_30d_total']:,.2f}",
+          f"{fc_summary['daily_trend_usd']:+.3f} USD/day")
 
 st.divider()
 
@@ -91,7 +97,7 @@ st.divider()
 left, right = st.columns(2)
 with left:
     st.subheader("Top cost drivers — by service")
-    ts = data["top_services"]
+    ts = data["top_services"].head(12)
     fig = px.bar(ts, x="cost", y="service", orientation="h",
                  labels={"cost": "Total cost (USD)", "service": ""})
     fig.update_layout(yaxis={"categoryorder": "total ascending"}, height=340,
@@ -99,15 +105,46 @@ with left:
     st.plotly_chart(fig, use_container_width=True)
 
 with right:
-    st.subheader("Spend by account")
-    ta = data["top_accounts"]
-    fig = px.pie(ta, values="cost", names="account_name", hole=0.45)
+    st.subheader("Spend by cloud provider")
+    bp = data["by_provider"].copy()
+    bp["cost"] = bp["cost"].clip(lower=0)  # drop net-negative (credit) slices
+    fig = px.pie(bp, values="cost", names="provider", hole=0.45,
+                 color="provider",
+                 color_discrete_map={"AWS": "#FF9900", "Microsoft": "#0078D4",
+                                     "Oracle": "#C74634"})
     fig.update_layout(height=340, margin=dict(l=0, r=0, t=10, b=0))
     st.plotly_chart(fig, use_container_width=True)
 
-# ---------------------------------------------------------------- MoM trend
-st.subheader("Month-over-month spend")
-fig = px.bar(mom, x="month", y="cost", labels={"cost": "USD", "month": ""})
+# ---------------------------------------------------------------- Account + category
+lft, rgt = st.columns(2)
+with lft:
+    st.subheader("Spend by account")
+    ta = data["top_accounts"]
+    fig = px.bar(ta, x="cost", y="account", orientation="h",
+                 labels={"cost": "Total billed cost (USD)", "account": ""})
+    fig.update_layout(yaxis={"categoryorder": "total ascending", "type": "category"},
+                      height=300, margin=dict(l=0, r=0, t=10, b=0))
+    st.plotly_chart(fig, use_container_width=True)
+with rgt:
+    st.subheader("Spend by service category")
+    bc = data["by_category"].copy()
+    bc["cost"] = bc["cost"].clip(lower=0)
+    fig = px.bar(bc.head(8), x="cost", y="category", orientation="h",
+                 labels={"cost": "Total billed cost (USD)", "category": ""})
+    fig.update_layout(yaxis={"categoryorder": "total ascending"}, height=300,
+                      margin=dict(l=0, r=0, t=10, b=0))
+    st.plotly_chart(fig, use_container_width=True)
+
+# ---------------------------------------------------------------- monthly / daily trend
+if len(mom) >= 2:
+    st.subheader("Month-over-month spend")
+    fig = px.bar(mom, x="month", y="cost", labels={"cost": "USD", "month": ""})
+    fig.update_xaxes(type="category")
+else:
+    # single billing month -> a monthly bar is meaningless; show the daily trend
+    st.subheader("Daily spend trend")
+    dt = data["daily_total"]
+    fig = px.area(dt, x="date", y="cost", labels={"cost": "USD", "date": ""})
 fig.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0))
 st.plotly_chart(fig, use_container_width=True)
 
@@ -128,8 +165,8 @@ else:
         "threshold": "threshold ($)", "pct_over": "% over baseline"})
     st.dataframe(
         show.style.format({
-            "cost ($)": "{:,.2f}", "baseline ($)": "{:,.2f}",
-            "threshold ($)": "{:,.2f}", "% over baseline": "{:+.0f}%"}),
+            "cost ($)": "{:,.4f}", "baseline ($)": "{:,.4f}",
+            "threshold ($)": "{:,.4f}", "% over baseline": "{:+,.0f}%"}),
         use_container_width=True, hide_index=True)
 
     # per-service line with anomaly markers

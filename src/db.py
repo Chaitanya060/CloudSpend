@@ -34,21 +34,23 @@ dim_date = Table(
 
 dim_account = Table(
     "dim_account", metadata,
-    Column("account_id", String(32), primary_key=True),
-    Column("account_name", String(64), nullable=False),
+    Column("account_id", String(128), primary_key=True),
+    Column("account_name", String(128), nullable=False),
 )
 
 dim_service = Table(
     "dim_service", metadata,
     Column("service_id", Integer, primary_key=True, autoincrement=True),
-    Column("service_name", String(32), nullable=False, unique=True),
+    Column("service_name", String(128), nullable=False, unique=True),
+    Column("service_category", String(64)),   # e.g. Compute, Storage (FOCUS)
+    Column("provider", String(32)),            # AWS / Microsoft / Oracle
 )
 
 fact_cost = Table(
     "fact_cost", metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("date_id", Integer, ForeignKey("dim_date.date_id"), nullable=False),
-    Column("account_id", String(32), ForeignKey("dim_account.account_id"), nullable=False),
+    Column("account_id", String(128), ForeignKey("dim_account.account_id"), nullable=False),
     Column("service_id", Integer, ForeignKey("dim_service.service_id"), nullable=False),
     Column("cost", Float, nullable=False),
 )

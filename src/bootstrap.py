@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from sqlalchemy import inspect as sa_inspect, text
 
-from src import db, generate_data, etl
+from src import db, etl
 
 
 def database_ready() -> bool:
@@ -28,7 +28,8 @@ def ensure_database(force: bool = False) -> bool:
     """Build the database if it's missing/empty. Returns True if it (re)built."""
     if not force and database_ready():
         return False
-    generate_data.main()
+    # etl.extract() reads the real FOCUS dataset (or generates the synthetic
+    # CSV when CLOUDSPEND_SOURCE=synthetic), so a single run() rebuilds all.
     etl.run()
     return True
 

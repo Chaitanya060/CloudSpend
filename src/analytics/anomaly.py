@@ -16,7 +16,8 @@ from src import queries
 
 
 def detect(window: int = config.ANOMALY_WINDOW,
-           sigma: float = config.ANOMALY_SIGMA) -> pd.DataFrame:
+           sigma: float = config.ANOMALY_SIGMA,
+           min_cost: float = config.ANOMALY_MIN_COST) -> pd.DataFrame:
     df = queries.daily_by_service().copy()
     out = []
 
@@ -28,10 +29,20 @@ def detect(window: int = config.ANOMALY_WINDOW,
         grp["baseline"] = roll.mean()
         grp["std"] = roll.std()
         grp["threshold"] = grp["baseline"] + sigma * grp["std"]
-        grp["is_anomaly"] = grp["cost"] > grp["threshold"]
-        grp["pct_over"] = (
-            (grp["cost"] - grp["baseline"]) / grp["baseline"] * 100
-        ).round(1)
+
+        # A day is anomalous only if it is BOTH statistically unusual AND
+        # materially large -- the min_cost floor stops sub-cent noise (where a
+        # near-zero baseline makes any blip look like a huge % jump) from
+        # drowning out the real cost spikes.
+        grp["is_anomaly"] = (
+            (grp["cost"] > grp["threshold"])
+            & (grp["cost"] >= min_cost)
+            & (grp["baseline"] > 0)
+        )
+        # % over baseline only where baseline is positive & meaningful
+        pct = (grp["cost"] - grp["baseline"]) / grp["baseline"].where(
+            grp["baseline"] > 0) * 100
+        grp["pct_over"] = pct.round(1)
         out.append(grp)
 
     result = pd.concat(out, ignore_index=True)

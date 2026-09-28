@@ -15,6 +15,8 @@ def _joined() -> pd.DataFrame:
                a.account_id       AS account_id,
                a.account_name     AS account_name,
                s.service_name     AS service,
+               s.service_category AS category,
+               s.provider         AS provider,
                f.cost             AS cost
         FROM fact_cost f
         JOIN dim_date    d ON f.date_id    = d.date_id
@@ -50,7 +52,24 @@ def top_services() -> pd.DataFrame:
 
 def top_accounts() -> pd.DataFrame:
     df = _joined()
-    return (df.groupby("account_name", as_index=False)["cost"].sum()
+    # disambiguate accounts that share a name across clouds (e.g. two
+    # "SunBird" accounts on AWS + Microsoft) and keep the label a string so
+    # numeric-looking account names don't become a numeric axis.
+    df["account"] = (df["account_name"].astype(str)
+                     + " (" + df["provider"].astype(str) + ")")
+    return (df.groupby("account", as_index=False)["cost"].sum()
+              .sort_values("cost", ascending=False))
+
+
+def by_provider() -> pd.DataFrame:
+    df = _joined()
+    return (df.groupby("provider", as_index=False)["cost"].sum()
+              .sort_values("cost", ascending=False))
+
+
+def by_category() -> pd.DataFrame:
+    df = _joined()
+    return (df.groupby("category", as_index=False)["cost"].sum()
               .sort_values("cost", ascending=False))
 
 
