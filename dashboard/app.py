@@ -20,10 +20,24 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import config                              # noqa: E402
-from src import queries                    # noqa: E402
+from src import queries, bootstrap         # noqa: E402
 from src.analytics import anomaly, forecast  # noqa: E402
 
 st.set_page_config(page_title="CloudSpend", page_icon="💸", layout="wide")
+
+
+@st.cache_resource
+def _bootstrap():
+    """Build the database once per server if it isn't there yet (e.g. on a
+    fresh Streamlit Cloud deploy). Local runs where run_pipeline.py already
+    populated the DB skip straight through."""
+    with st.spinner("First run: generating synthetic billing data and "
+                    "building the star schema…"):
+        bootstrap.ensure_database()
+    return True
+
+
+_bootstrap()
 
 
 @st.cache_data(ttl=60)
