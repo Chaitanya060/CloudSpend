@@ -1,0 +1,17 @@
+# Data & DB artifacts
+data/*.csv
+data/*.db
+data/*.sqlite
+data/*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
